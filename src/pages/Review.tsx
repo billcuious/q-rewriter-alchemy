@@ -1,69 +1,107 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { CheckCircle, XCircle, RotateCcw, ArrowLeft, ArrowRight, Eye, Download } from "lucide-react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { CheckCircle, XCircle, ArrowLeft, ArrowRight, Eye, RefreshCw } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 
+interface RewrittenQuestion {
+  question_id: string;
+  rewritten_question: string;
+  answer_choices: string[];
+  correct_answer_index: number;
+  explanations: {
+    correct: string;
+    [key: string]: string;
+  };
+  original_text: string;
+  user_prompt_applied: string;
+}
+
 const Review = () => {
   const navigate = useNavigate();
-  const [currentQuestion, setCurrentQuestion] = useState(0);
-  const [decisions, setDecisions] = useState<{ [key: number]: 'accepted' | 'rejected' | 'retry' }>({});
+  const [questions, setQuestions] = useState<RewrittenQuestion[]>([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [approvedQuestions, setApprovedQuestions] = useState<Set<string>>(new Set());
+  const [rejectedQuestions, setRejectedQuestions] = useState<Set<string>>(new Set());
 
-  const sampleQuestions = [
-    {
-      id: "Q083",
-      original: {
-        question: "A 45-year-old patient with diabetes mellitus type 2 is prescribed metformin. Which of the following is the primary mechanism of action of metformin?",
-        options: [
-          "Increases insulin secretion from pancreatic beta cells",
-          "Decreases hepatic glucose production and improves insulin sensitivity",
-          "Delays gastric emptying and reduces postprandial glucose spikes",
-          "Inhibits sodium-glucose cotransporter 2 in the kidneys",
-          "Stimulates glucose uptake in skeletal muscle through GLUT4 translocation"
-        ],
-        correctAnswer: 1,
-        explanation: "Metformin primarily works by decreasing hepatic glucose production through inhibition of gluconeogenesis and glycogenolysis. It also improves peripheral insulin sensitivity..."
-      },
-      rewritten: {
-        question: "A middle-aged diabetic patient receives a prescription for metformin as part of their treatment regimen. What represents the fundamental mechanism by which this medication exerts its therapeutic effects?",
-        options: [
-          "Enhances pancreatic beta cell insulin release",
-          "Reduces liver glucose synthesis while enhancing cellular insulin responsiveness",
-          "Slows stomach emptying to moderate post-meal glucose elevation",
-          "Blocks renal glucose reabsorption transporters",
-          "Promotes muscle cell glucose absorption via transporter activation"
-        ],
-        correctAnswer: 1,
-        explanation: "Metformin's primary therapeutic action involves suppressing hepatic glucose synthesis by inhibiting key metabolic pathways including gluconeogenesis and glycogenolysis. Additionally, it enhances peripheral tissue sensitivity to insulin..."
-      },
-      pageRange: [234, 236]
+  useEffect(() => {
+    const storedQuestions = sessionStorage.getItem('processedQuestions');
+    if (storedQuestions) {
+      setQuestions(JSON.parse(storedQuestions));
+    } else {
+      toast.error("No processed questions found. Please go back and upload a PDF.");
+      navigate('/upload');
     }
-  ];
+  }, [navigate]);
 
-  const handleDecision = (decision: 'accepted' | 'rejected' | 'retry') => {
-    setDecisions(prev => ({ ...prev, [currentQuestion]: decision }));
-    toast.success(`Question ${decision === 'accepted' ? 'accepted' : decision === 'rejected' ? 'rejected' : 'marked for retry'}`);
-  };
+  const currentQuestion = questions[currentIndex];
 
-  const getDecisionColor = (decision: string) => {
-    switch (decision) {
-      case 'accepted': return 'bg-green-100 text-green-800 border-green-200';
-      case 'rejected': return 'bg-red-100 text-red-800 border-red-200';
-      case 'retry': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-      default: return 'bg-gray-100 text-gray-800 border-gray-200';
+  const handleApprove = () => {
+    if (currentQuestion) {
+      setApprovedQuestions(prev => new Set(prev).add(currentQuestion.question_id));
+      setRejectedQuestions(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(currentQuestion.question_id);
+        return newSet;
+      });
+      toast.success(`Question ${currentQuestion.question_id} approved`);
     }
   };
 
-  const currentQ = sampleQuestions[currentQuestion];
+  const handleReject = () => {
+    if (currentQuestion) {
+      setRejectedQuestions(prev => new Set(prev).add(currentQuestion.question_id));
+      setApprovedQuestions(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(currentQuestion.question_id);
+        return newSet;
+      });
+      toast.error(`Question ${currentQuestion.question_id} rejected`);
+    }
+  };
+
+  const handleFinishReview = () => {
+    const approvedCount = approvedQuestions.size;
+    const rejectedCount = rejectedQuestions.size;
+    
+    toast.success(`Review complete! ${approvedCount} approved, ${rejectedCount} rejected`);
+    
+    // Store final results
+    const finalResults = {
+      approved: questions.filter(q => approvedQuestions.has(q.question_id)),
+      rejected: questions.filter(q => rejectedQuestions.has(q.question_id)),
+      summary: {
+        total: questions.length,
+        approved: approvedCount,
+        rejected: rejectedCount
+      }
+    };
+    
+    sessionStorage.setItem('finalResults', JSON.stringify(finalResults));
+    navigate('/results');
+  };
+
+  if (!currentQuestion) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-orange-50 to-red-100 flex items-center justify-center">
+        <Card className="max-w-md">
+          <CardContent className="text-center p-8">
+            <p className="text-lg text-gray-600 mb-4">No questions to review</p>
+            <Button onClick={() => navigate('/upload')}>Back to Upload</Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-green-50 to-blue-100">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-orange-50 to-red-100">
       {/* Header */}
-      <header className="bg-white/80 backdrop-blur-sm border-b border-green-200">
+      <header className="bg-white/80 backdrop-blur-sm border-b border-orange-200">
         <div className="container mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
@@ -77,11 +115,11 @@ const Review = () => {
               </Button>
             </div>
             <div className="flex items-center space-x-3">
-              <div className="bg-gradient-to-r from-green-600 to-blue-600 p-2 rounded-lg">
+              <div className="bg-gradient-to-r from-orange-600 to-red-600 p-2 rounded-lg">
                 <Eye className="h-6 w-6 text-white" />
               </div>
-              <h1 className="text-2xl font-bold bg-gradient-to-r from-green-600 to-blue-600 bg-clip-text text-transparent">
-                Review & Approve
+              <h1 className="text-2xl font-bold bg-gradient-to-r from-orange-600 to-red-600 bg-clip-text text-transparent">
+                Review Results
               </h1>
             </div>
           </div>
@@ -91,43 +129,40 @@ const Review = () => {
       <div className="container mx-auto px-6 py-12">
         <div className="max-w-7xl mx-auto">
           {/* Progress Indicator */}
-          <div className="flex items-center justify-center mb-12">
+          <div className="flex items-center justify-center mb-8">
             <div className="flex items-center space-x-4">
               <div className="bg-green-600 text-white rounded-full w-8 h-8 flex items-center justify-center text-sm font-bold">✓</div>
               <div className="w-16 h-1 bg-green-600 rounded"></div>
               <div className="bg-green-600 text-white rounded-full w-8 h-8 flex items-center justify-center text-sm font-bold">✓</div>
-              <div className="w-16 h-1 bg-green-600 rounded"></div>
-              <div className="bg-green-600 text-white rounded-full w-8 h-8 flex items-center justify-center text-sm font-bold">3</div>
+              <div className="w-16 h-1 bg-orange-600 rounded"></div>
+              <div className="bg-orange-600 text-white rounded-full w-8 h-8 flex items-center justify-center text-sm font-bold">3</div>
             </div>
           </div>
 
-          {/* Question Navigation */}
+          {/* Question Counter and Navigation */}
           <div className="flex items-center justify-between mb-8">
             <div className="flex items-center space-x-4">
-              <h2 className="text-2xl font-bold text-gray-800">
-                Question {currentQuestion + 1} of {sampleQuestions.length}
-              </h2>
-              <Badge variant="outline" className="text-sm">
-                ID: {currentQ.id}
+              <Badge variant="outline" className="text-lg px-4 py-2">
+                Question {currentIndex + 1} of {questions.length}
               </Badge>
               <Badge variant="outline" className="text-sm">
-                Pages: {currentQ.pageRange[0]}-{currentQ.pageRange[1]}
+                {currentQuestion.question_id}
               </Badge>
             </div>
             <div className="flex items-center space-x-2">
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 size="sm"
-                disabled={currentQuestion === 0}
-                onClick={() => setCurrentQuestion(prev => prev - 1)}
+                onClick={() => setCurrentIndex(Math.max(0, currentIndex - 1))}
+                disabled={currentIndex === 0}
               >
                 Previous
               </Button>
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 size="sm"
-                disabled={currentQuestion === sampleQuestions.length - 1}
-                onClick={() => setCurrentQuestion(prev => prev + 1)}
+                onClick={() => setCurrentIndex(Math.min(questions.length - 1, currentIndex + 1))}
+                disabled={currentIndex === questions.length - 1}
               >
                 Next
               </Button>
@@ -136,138 +171,132 @@ const Review = () => {
 
           {/* Side-by-Side Comparison */}
           <div className="grid lg:grid-cols-2 gap-8 mb-8">
-            {/* Original Question */}
-            <Card className="h-fit">
-              <CardHeader className="bg-gray-50">
-                <CardTitle className="text-lg text-gray-800">Original Question</CardTitle>
+            {/* Original */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-xl text-gray-800">Original Content</CardTitle>
+                <CardDescription>Extracted from PDF page</CardDescription>
               </CardHeader>
-              <CardContent className="p-6 space-y-6">
-                <div>
-                  <h3 className="font-semibold mb-3 text-gray-800">Question Stem</h3>
-                  <p className="text-gray-700 leading-relaxed">{currentQ.original.question}</p>
-                </div>
-                
-                <div>
-                  <h3 className="font-semibold mb-3 text-gray-800">Answer Options</h3>
-                  <div className="space-y-2">
-                    {currentQ.original.options.map((option, index) => (
-                      <div key={index} className={`p-3 rounded-lg border ${
-                        index === currentQ.original.correctAnswer 
-                          ? 'bg-green-50 border-green-200' 
-                          : 'bg-gray-50 border-gray-200'
-                      }`}>
-                        <span className="font-medium mr-2">{String.fromCharCode(65 + index)}.</span>
-                        {option}
-                        {index === currentQ.original.correctAnswer && (
-                          <Badge className="ml-2 bg-green-600">Correct</Badge>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <h3 className="font-semibold mb-3 text-gray-800">Explanation</h3>
-                  <p className="text-gray-700 leading-relaxed text-sm">{currentQ.original.explanation}</p>
+              <CardContent className="space-y-4">
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <h4 className="font-medium mb-2">Raw Text:</h4>
+                  <p className="text-sm text-gray-700 whitespace-pre-wrap">
+                    {currentQuestion.original_text}
+                  </p>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Rewritten Question */}
-            <Card className="h-fit">
-              <CardHeader className="bg-blue-50">
-                <CardTitle className="text-lg text-blue-800">AI Rewritten Question</CardTitle>
+            {/* Rewritten */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-xl text-orange-800">Rewritten Content</CardTitle>
+                <CardDescription>AI-generated version</CardDescription>
               </CardHeader>
-              <CardContent className="p-6 space-y-6">
-                <div>
-                  <h3 className="font-semibold mb-3 text-gray-800">Question Stem</h3>
-                  <p className="text-gray-700 leading-relaxed">{currentQ.rewritten.question}</p>
-                </div>
-                
-                <div>
-                  <h3 className="font-semibold mb-3 text-gray-800">Answer Options</h3>
-                  <div className="space-y-2">
-                    {currentQ.rewritten.options.map((option, index) => (
-                      <div key={index} className={`p-3 rounded-lg border ${
-                        index === currentQ.rewritten.correctAnswer 
-                          ? 'bg-green-50 border-green-200' 
-                          : 'bg-gray-50 border-gray-200'
-                      }`}>
-                        <span className="font-medium mr-2">{String.fromCharCode(65 + index)}.</span>
-                        {option}
-                        {index === currentQ.rewritten.correctAnswer && (
-                          <Badge className="ml-2 bg-green-600">Correct</Badge>
-                        )}
-                      </div>
-                    ))}
+              <CardContent className="space-y-4">
+                <div className="space-y-4">
+                  <div>
+                    <h4 className="font-medium mb-2">Question:</h4>
+                    <p className="text-gray-700">{currentQuestion.rewritten_question}</p>
                   </div>
-                </div>
-
-                <div>
-                  <h3 className="font-semibold mb-3 text-gray-800">Explanation</h3>
-                  <p className="text-gray-700 leading-relaxed text-sm">{currentQ.rewritten.explanation}</p>
+                  
+                  <Separator />
+                  
+                  <div>
+                    <h4 className="font-medium mb-2">Answer Choices:</h4>
+                    <div className="space-y-2">
+                      {currentQuestion.answer_choices.map((choice, index) => (
+                        <div 
+                          key={index} 
+                          className={`p-2 rounded ${
+                            index === currentQuestion.correct_answer_index 
+                              ? 'bg-green-50 border border-green-200' 
+                              : 'bg-gray-50'
+                          }`}
+                        >
+                          <span className="font-medium">{String.fromCharCode(65 + index)}.</span> {choice}
+                          {index === currentQuestion.correct_answer_index && (
+                            <Badge variant="secondary" className="ml-2 text-xs">Correct</Badge>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  
+                  <Separator />
+                  
+                  <div>
+                    <h4 className="font-medium mb-2">Explanations:</h4>
+                    <div className="space-y-2 text-sm">
+                      <div className="bg-green-50 p-3 rounded">
+                        <strong>Correct Answer:</strong> {currentQuestion.explanations.correct}
+                      </div>
+                      {Object.entries(currentQuestion.explanations)
+                        .filter(([key]) => key !== 'correct')
+                        .map(([key, explanation]) => (
+                        <div key={key} className="bg-gray-50 p-3 rounded">
+                          <strong>Option {key}:</strong> {explanation}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </CardContent>
             </Card>
           </div>
 
-          {/* Decision Panel */}
+          {/* Action Buttons */}
+          <div className="flex items-center justify-center space-x-4 mb-8">
+            <Button
+              onClick={handleReject}
+              variant="destructive"
+              size="lg"
+              className="px-8"
+            >
+              <XCircle className="h-5 w-5 mr-2" />
+              Reject
+            </Button>
+            <Button
+              onClick={handleApprove}
+              size="lg"
+              className="bg-green-600 hover:bg-green-700 px-8"
+            >
+              <CheckCircle className="h-5 w-5 mr-2" />
+              Approve
+            </Button>
+          </div>
+
+          {/* Status Summary */}
           <Card>
             <CardHeader>
-              <CardTitle>Review Decision</CardTitle>
+              <CardTitle>Review Progress</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-4">
-                  <span className="text-sm text-gray-600">Current Status:</span>
-                  {decisions[currentQuestion] && (
-                    <Badge className={getDecisionColor(decisions[currentQuestion])}>
-                      {decisions[currentQuestion].charAt(0).toUpperCase() + decisions[currentQuestion].slice(1)}
-                    </Badge>
-                  )}
-                  {!decisions[currentQuestion] && (
-                    <Badge variant="outline">Pending Review</Badge>
-                  )}
+              <div className="grid grid-cols-3 gap-4 text-center">
+                <div className="bg-blue-50 p-4 rounded-lg">
+                  <div className="text-2xl font-bold text-blue-600">{questions.length}</div>
+                  <div className="text-sm text-gray-600">Total Questions</div>
                 </div>
-                
-                <div className="flex items-center space-x-3">
-                  <Button 
-                    variant="outline" 
-                    onClick={() => handleDecision('rejected')}
-                    className="text-red-600 border-red-200 hover:bg-red-50"
-                  >
-                    <XCircle className="h-4 w-4 mr-2" />
-                    Reject
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    onClick={() => handleDecision('retry')}
-                    className="text-yellow-600 border-yellow-200 hover:bg-yellow-50"
-                  >
-                    <RotateCcw className="h-4 w-4 mr-2" />
-                    Retry
-                  </Button>
-                  <Button 
-                    onClick={() => handleDecision('accepted')}
-                    className="bg-green-600 hover:bg-green-700 text-white"
-                  >
-                    <CheckCircle className="h-4 w-4 mr-2" />
-                    Accept
-                  </Button>
+                <div className="bg-green-50 p-4 rounded-lg">
+                  <div className="text-2xl font-bold text-green-600">{approvedQuestions.size}</div>
+                  <div className="text-sm text-gray-600">Approved</div>
+                </div>
+                <div className="bg-red-50 p-4 rounded-lg">
+                  <div className="text-2xl font-bold text-red-600">{rejectedQuestions.size}</div>
+                  <div className="text-sm text-gray-600">Rejected</div>
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* Final Actions */}
-          <div className="flex justify-center mt-12">
+          {/* Finish Review Button */}
+          <div className="text-center mt-8">
             <Button 
               size="lg" 
-              onClick={() => navigate('/results')}
-              className="bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 text-white px-8 py-4 text-lg"
+              onClick={handleFinishReview}
+              className="bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white px-8 py-4 text-lg"
             >
-              <Download className="h-5 w-5 mr-2" />
-              Export Results
+              Finish Review & Export
               <ArrowRight className="ml-2 h-5 w-5" />
             </Button>
           </div>

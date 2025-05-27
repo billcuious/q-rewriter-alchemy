@@ -8,10 +8,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
+import { extractTextFromPDF } from "@/utils/pdfProcessor";
+import { rewriteQuestion, type RewrittenQuestion } from "@/utils/aiProcessor";
 
 const UploadPage = () => {
   const navigate = useNavigate();
   const [file, setFile] = useState<File | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [rewritingRules, setRewritingRules] = useState(`Rewrite questions with the following guidelines:
 - Tone: Professional and academic
 - Complexity: Maintain original difficulty level
@@ -30,13 +33,59 @@ const UploadPage = () => {
     }
   };
 
-  const handleStartProcessing = () => {
+  const handleStartProcessing = async () => {
     if (!file) {
       toast.error("Please upload a PDF file first");
       return;
     }
+    
+    setIsProcessing(true);
     toast.success("Starting AI processing...");
-    navigate('/processing');
+    
+    try {
+      // Extract text from PDF
+      toast.info("Extracting text from PDF...");
+      const questions = await extractTextFromPDF(file);
+      
+      if (questions.length === 0) {
+        toast.error("No questions found in the PDF. Please try a different file.");
+        setIsProcessing(false);
+        return;
+      }
+      
+      toast.success(`Found ${questions.length} potential questions. Processing with AI...`);
+      
+      // Process questions with AI (limit to first 3 for demo)
+      const questionsToProcess = questions.slice(0, 3);
+      const results: RewrittenQuestion[] = [];
+      
+      for (let i = 0; i < questionsToProcess.length; i++) {
+        const question = questionsToProcess[i];
+        toast.info(`Processing question ${i + 1} of ${questionsToProcess.length}...`);
+        
+        try {
+          const rewritten = await rewriteQuestion(question.rawText, question.id, rewritingRules);
+          results.push(rewritten);
+          toast.success(`Question ${question.id} processed successfully`);
+        } catch (error) {
+          console.error(`Failed to process question ${question.id}:`, error);
+          toast.error(`Failed to process question ${question.id}`);
+        }
+      }
+      
+      // Store results in sessionStorage for demo
+      sessionStorage.setItem('processedQuestions', JSON.stringify(results));
+      sessionStorage.setItem('originalQuestions', JSON.stringify(questions));
+      
+      toast.success(`Processing complete! ${results.length} questions rewritten.`);
+      navigate('/review');
+      
+    } catch (error) {
+      console.error('Processing error:', error);
+      toast.error(`Processing failed: ${error}`);
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   return (
@@ -89,7 +138,7 @@ const UploadPage = () => {
                   PDF Upload
                 </CardTitle>
                 <CardDescription>
-                  Upload your MCQ question bank PDF (500-1000+ pages supported)
+                  Upload your MCQ question bank PDF (Demo: processes first 5 pages)
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
@@ -100,6 +149,7 @@ const UploadPage = () => {
                     onChange={handleFileUpload}
                     className="hidden"
                     id="pdf-upload"
+                    disabled={isProcessing}
                   />
                   <label htmlFor="pdf-upload" className="cursor-pointer">
                     <Upload className="h-12 w-12 text-blue-400 mx-auto mb-4" />
@@ -107,7 +157,7 @@ const UploadPage = () => {
                       {file ? file.name : "Click to upload PDF"}
                     </p>
                     <p className="text-sm text-gray-500">
-                      Supports large PDFs up to 1000 pages
+                      Demo mode: processes first 5 pages only
                     </p>
                   </label>
                 </div>
@@ -174,6 +224,7 @@ const UploadPage = () => {
                     rows={12}
                     className="resize-none"
                     placeholder="Enter your rewriting guidelines..."
+                    disabled={isProcessing}
                   />
                   <p className="text-xs text-gray-500">
                     These instructions will guide AI rewriting while preserving educational integrity
@@ -211,11 +262,11 @@ const UploadPage = () => {
             <Button 
               size="lg" 
               onClick={handleStartProcessing}
-              disabled={!file}
+              disabled={!file || isProcessing}
               className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-8 py-4 text-lg"
             >
-              Start AI Processing
-              <ArrowRight className="ml-2 h-5 w-5" />
+              {isProcessing ? "Processing..." : "Start AI Processing"}
+              {!isProcessing && <ArrowRight className="ml-2 h-5 w-5" />}
             </Button>
           </div>
         </div>
