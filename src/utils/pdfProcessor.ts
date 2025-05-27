@@ -1,8 +1,11 @@
 
 import * as pdfjsLib from 'pdfjs-dist';
 
-// Set the worker source to match the installed version
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.js`;
+// Use the bundled worker for better compatibility
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+  'pdfjs-dist/build/pdf.worker.min.js',
+  import.meta.url
+).toString();
 
 export interface ExtractedQuestion {
   id: string;
