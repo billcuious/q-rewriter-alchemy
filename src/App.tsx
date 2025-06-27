@@ -10,6 +10,7 @@ import Processing from "./pages/Processing";
 import Review from "./pages/Review";
 import Results from "./pages/Results";
 import Demo from "./pages/Demo";
+import GitHubPreview from "./pages/GitHubPreview";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -27,6 +28,7 @@ const App = () => (
           <Route path="/review" element={<Review />} />
           <Route path="/results" element={<Results />} />
           <Route path="/demo" element={<Demo />} />
+          <Route path="/github-preview" element={<GitHubPreview />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

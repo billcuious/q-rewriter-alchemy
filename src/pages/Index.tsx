@@ -1,7 +1,6 @@
-
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { FileText, Brain, CheckCircle, Download, ArrowRight, Upload, Settings, Eye } from "lucide-react";
+import { FileText, Brain, CheckCircle, Download, ArrowRight, Upload, Settings, Eye, Github } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 const Index = () => {
@@ -54,13 +53,23 @@ const Index = () => {
                 MCQ Rewriter Pro
               </h1>
             </div>
-            <Button 
-              onClick={() => navigate('/upload')}
-              className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white"
-            >
-              Get Started
-              <ArrowRight className="ml-2 h-4 w-4" />
-            </Button>
+            <div className="flex gap-2">
+              <Button 
+                onClick={() => navigate('/github-preview')}
+                variant="outline"
+                className="border-blue-300 text-blue-600 hover:bg-blue-50"
+              >
+                <Github className="mr-2 h-4 w-4" />
+                GitHub Preview
+              </Button>
+              <Button 
+                onClick={() => navigate('/upload')}
+                className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white"
+              >
+                Get Started
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            </div>
           </div>
         </div>
       </header>
@@ -93,6 +102,15 @@ const Index = () => {
               >
                 View Demo
                 <Eye className="ml-2 h-5 w-5" />
+              </Button>
+              <Button 
+                size="lg" 
+                variant="outline" 
+                onClick={() => navigate('/github-preview')}
+                className="border-green-300 text-green-600 hover:bg-green-50 px-8 py-4 text-lg"
+              >
+                <Github className="mr-2 h-5 w-5" />
+                GitHub Preview
               </Button>
             </div>
           </div>
